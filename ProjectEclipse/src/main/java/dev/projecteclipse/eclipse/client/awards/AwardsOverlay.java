@@ -122,7 +122,7 @@ public final class AwardsOverlay {
     /** Payloads cached within this many ticks of world join are login replays — never played. */
     private static final int LATE_JOIN_GRACE_TICKS = 100;
 
-    /** Flare ray palette mirroring {@code quasar/emitters/roulette_flare.json} (warm → purple). */
+    /** Flare ray palette (warm → purple; inherited from the retired world-space emitter). */
     private static final int[] FLARE_COLORS = {0xFFF3C4, 0xFFD166, 0xC77DFF, 0x7B2CBF};
 
     // --- UIFEEL winner celebration (screen-space; see renderConfetti) ---
@@ -688,10 +688,11 @@ public final class AwardsOverlay {
     }
 
     /**
-     * Screen-space flare behind the winner head. The checked-in {@code eclipse:roulette_flare}
-     * Quasar emitter is world-space (camera-dependent — unusable behind a fixed overlay), so
-     * the robust option renders here in code: rotating warm→purple rays + soft glow quads
-     * mirroring the emitter's gradient. Skipped under {@code reducedFx}.
+     * Screen-space flare behind the winner head. A world-space Quasar emitter
+     * ({@code eclipse:roulette_flare}, retired in WAVE10 — EVAL2-A P2 orphan) was tried
+     * first but is camera-dependent and unusable behind a fixed overlay, so the robust
+     * option renders here in code: rotating warm→purple rays + soft glow quads
+     * mirroring that emitter's gradient. Skipped under {@code reducedFx}.
      */
     private static void renderFlare(GuiGraphics guiGraphics, int centerX, int centerY,
             float landTime, float alpha) {
@@ -732,8 +733,8 @@ public final class AwardsOverlay {
 
     /**
      * UIFEEL winner celebration — confetti-glyph burst. There is no screen-space Quasar
-     * hook (the checked-in {@code eclipse:roulette_flare} emitter is world-space, unusable
-     * behind a fixed overlay — same verdict as {@link #renderFlare}), so the confetti
+     * hook (world-space emitters are unusable behind a fixed overlay — same verdict as
+     * {@link #renderFlare}, whose emitter was retired in WAVE10), so the confetti
      * draws here: {@value #CONFETTI_COUNT} deterministic particles seeded by the reveal
      * salt, launched in an upward fan from the winner head with per-particle speed/life,
      * pulled down by a soft gravity term and fading quadratically. Even indices are tiny

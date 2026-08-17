@@ -200,6 +200,13 @@ public final class StormApproachFx {
         outX /= outLen;
         outZ /= outLen;
         double side = (random.nextDouble() * 2.0D - 1.0D) * RUNNER_SIDE_SCATTER;
+        // EVAL2-A P3: |side| < ~1.5 launches the runner straight through the camera
+        // position — a 2.4-block non-additive quad crossing the near plane reads as the
+        // F-107 blade class. Rounding the lane outward (sign kept) preserves the
+        // "storm inhales you" scatter while the through-the-lens case disappears.
+        if (Math.abs(side) < 1.5D) {
+            side = Math.copySign(1.5D, side);
+        }
         double behind = RUNNER_START_BEHIND * (0.6D + random.nextDouble() * 0.8D);
         double startX = player.getX() + outX * behind - outZ * side;
         double startZ = player.getZ() + outZ * behind + outX * side;

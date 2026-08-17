@@ -732,7 +732,11 @@ public final class EclipseDragonFight {
             }
         }
         for (ServerPlayer player : List.copyOf(bossBar.getPlayers())) {
-            if (player.level() != level) {
+            // EVAL2-C P-4: disconnected players vanish from level.players() but their dead
+            // reference stays in the ServerBossEvent set for the whole fight (the level
+            // check below is still false for them) — sweep them like the house pattern
+            // (MinigameService.onPlayerLoggedOut) does, instead of holding them for hours.
+            if (player.level() != level || player.hasDisconnected()) {
                 bossBar.removePlayer(player);
             }
         }

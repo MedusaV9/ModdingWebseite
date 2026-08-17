@@ -219,6 +219,21 @@ public class PortalKeyEntity extends EclipseGeoMob {
                 EclipseGeoAnimations.hold(geoId(), ANIM_UNLOCK_TURN));
     }
 
+    /**
+     * POLISH2 contract-v2 blend-in (EVAL2-C P-1, the last open entry of the M-wave
+     * batch): {@code unlock_turn} snaps 25° on {@code body.rotx} out of {@code fly} when
+     * the key seats — 2 t of blend is invisible against the {@value #SEAT_TURN_TICKS} t
+     * turn window and keeps the three-detent read intact (the precession spin bones are
+     * Molang and unaffected by controller transitions).
+     */
+    @Override
+    protected int actionTransitionTicks(String animName) {
+        if (ANIM_UNLOCK_TURN.equals(animName)) {
+            return 2;
+        }
+        return super.actionTransitionTicks(animName);
+    }
+
     // --- triggers ---
 
     @Override

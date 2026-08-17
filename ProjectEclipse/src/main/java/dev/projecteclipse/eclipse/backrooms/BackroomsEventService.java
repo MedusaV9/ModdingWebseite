@@ -547,15 +547,30 @@ public final class BackroomsEventService {
 
         ServerLevel overworld = server.overworld();
         BlockPos altar = EclipseWorldState.get(server).getSanctumAltarPos();
+        boolean landedAtAltar = false;
         if (altar != null) {
             // Land on the plaza surface diagonally beside the altar (clear of the pillars).
             int x = altar.getX() + 2;
             int z = altar.getZ() + 2;
             int y = overworld.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
-            float yaw = (float) (Math.toDegrees(Math.atan2(
-                    altar.getZ() + 0.5D - (z + 0.5D), altar.getX() + 0.5D - (x + 0.5D))) - 90.0D);
-            player.teleportTo(overworld, x + 0.5D, y, z + 0.5D, yaw, 0.0F);
-        } else {
+            // EVAL2-C P-2 (the F-109 / W5-B6 void class): on an unloaded chunk getHeight()
+            // returns the min build height — teleporting there is the void-column death
+            // loop. Today the altar sits in the always-loaded spawn chunks, but that
+            // implicit cover breaks with spawnChunkRadius=0 or a relocated altar, so the
+            // sentinel gate is explicit; invalid Y falls through to anchor/world spawn.
+            if (y > overworld.getMinBuildHeight()) {
+                float yaw = (float) (Math.toDegrees(Math.atan2(
+                        altar.getZ() + 0.5D - (z + 0.5D), altar.getX() + 0.5D - (x + 0.5D))) - 90.0D);
+                player.teleportTo(overworld, x + 0.5D, y, z + 0.5D, yaw, 0.0F);
+                landedAtAltar = true;
+            } else {
+                EclipseMod.LOGGER.warn(
+                        "Backrooms exit: altar plaza at ({}, {}) has no loaded surface (heightmap {}), "
+                                + "falling back to return anchor / world spawn for {}",
+                        x, z, y, player.getScoreboardName());
+            }
+        }
+        if (!landedAtAltar) {
             BackroomsState.ReturnAnchor anchor = state.returnAnchor(player.getUUID());
             ServerLevel target = anchor == null ? null : server.getLevel(anchor.dimension());
             if (target != null) {
