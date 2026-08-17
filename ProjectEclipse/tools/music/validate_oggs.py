@@ -99,7 +99,13 @@ def music_files_from_sounds_json():
             continue
         for entry in definition.get("sounds", []):
             name = entry["name"] if isinstance(entry, dict) else entry
-            rel = name.split(":", 1)[-1]
+            namespace, _, rel = name.rpartition(":")
+            if namespace and namespace != "eclipse":
+                # Rows in a foreign namespace (music.xbox_era -> minecraft:music/game/*)
+                # resolve against Mojang's asset index, never this repo — validating them
+                # here kept the gate permanently red (12 phantom "missing file" FAILs).
+                # Same skip rule as gametest/music/MusicAssetValidationTest.
+                continue
             out.setdefault(event, []).append(ASSETS / "sounds" / f"{rel}.ogg")
     return out
 
