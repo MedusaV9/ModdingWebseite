@@ -3,8 +3,8 @@
  * ("Early35"). Every trailer is 1080x1920 @ 60fps and is rendered purely
  * from a `TrailerStyleConfig` by src/v2/factory/TrailerFactory.tsx.
  *
- * Style-wave agents: add configs to src/v2/styles/wave_b.ts / wave_c.ts.
- * See src/v2/styles/wave_a.ts for three fully worked reference styles.
+ * The 35 style configs live in src/v2/styles/NN_name.ts (one file per
+ * style, collected by src/v2/styles/index.ts).
  */
 
 // ---------------------------------------------------------------------------
