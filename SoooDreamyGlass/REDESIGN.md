@@ -84,7 +84,7 @@ stille „Nacht-first"-Richtung der letzten Wellen:
 | | Vorher | Nachher |
 |---|---|---|
 | Hintergrund | statischer Raum + 18 Staubpunkte | `AnimatedBackground`: Raum + Lampe + Staub + **Atemglühen** — zwei sehr langsam atmende Glühfelder in den Paar-Farben unter dem Lampenkegel (≤ 8 Hz, Reduce Motion/Low Power/Hintergrund: stilles Gemälde) |
-| Kopf | „137 Tage zusammen" + Status | **Begrüßungszeile** darüber: „Guten Morgen · Mittagsstunde · Guten Abend" aus der Zustellrunde (`Zustellrunde.greetingKey`, Foundation-getestet) — der Screen sagt zuerst Hallo, dann Zahlen |
+| Kopf | „137 Tage zusammen" + Status | **Begrüßungszeile** darüber: „Guten Morgen · Schönen Tag euch · Guten Abend" aus der Zustellrunde (`Zustellrunde.greetingKey`, Foundation-getestet) — der Screen sagt zuerst Hallo, dann Zahlen |
 | Avatare | `.plain`-Buttons, Antwort nur haptisch | federnde Druck-Antwort (`DSPressable`) — jede Berührung antwortet im Frame sichtbar (Gebot 14) |
 | Mood-Ack-Chip | handgebaute Kapsel | `DSChip` (ein Chip-Vokabular für die ganze App) |
 
